@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pedigree — a journey through the generations</title>
+<style>
+/* ── tokens ── */
+:root {
+  --ink:     #1d1d1b;
+  --accent:  #1d71b8;
+  --bg:      #f7f7f5;
+  --card-bg: #ffffff;
+  --border:  #e0e0e0;
+  --track:   #d8d8d8;
+  --callout: #f5a623;
+  --male:    #c8dff5;
+  --female:  #f5c8d9;
+  --unknown: #e0e0e0;
+  --line:    #1d1d1b;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  padding: 24px 16px 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+/* ── page header ── */
+.page-header { text-align: center; max-width: 860px; }
+.page-header h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+.page-header p  { font-size: 13px; color: #777; }
+
+/* ── intro accordion ── */
+.intro-card {
+  width: 100%; max-width: 920px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.intro-toggle {
+  width: 100%; padding: 13px 18px;
+  display: flex; align-items: center; justify-content: space-between;
+  background: none; border: none; cursor: pointer;
+  font: 600 14px/1 inherit;
+  color: var(--accent);
+}
+.intro-toggle .arrow { transition: transform .25s; font-size: 11px; }
+.intro-toggle.open .arrow { transform: rotate(180deg); }
+.intro-body {
+  display: none; padding: 0 18px 18px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+.intro-body.open { display: grid; }
+.sym-row {
+  display: flex; align-items: center; gap: 12px;
+}
+.sym-row svg { flex: none; width: 44px; height: 44px; }
+.sym-row p { font-size: 13px; line-height: 1.45; }
+.sym-row strong { display: block; margin-bottom: 2px; }
+.intro-body hr {
+  grid-column: 1 / -1;
+  border: none; border-top: 1px solid var(--border);
+}
+
+/* ── controls ── */
+.controls {
+  display: flex; align-items: center; gap: 14px;
+  width: 100%; max-width: 760px;
+}
+.play-btn {
+  width: 38px; height: 38px; border-radius: 50%;
+  border: none; background: var(--accent); color: #fff;
+  font-size: 14px; cursor: pointer; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.play-btn:hover { background: #155d94; }
+input[type=range] {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 5px; border-radius: 3px;
+  background: var(--track); outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #fff; box-shadow: 0 0 0 1px var(--accent);
+  cursor: pointer;
+}
+input[type=range]::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #fff; box-shadow: 0 0 0 1px var(--accent);
+  cursor: pointer;
+}
+.gen-label {
+  font-size: 15px; font-weight: 600; color: var(--accent);
+  min-width: 130px; text-align: center;
+}
+.tick-row {
+  display: flex; justify-content: space-between;
+  width: 100%; max-width: 760px;
+  padding: 0 19px; font-size: 11px; color: #aaa;
+}
+
+/* ── annotation panel ── */
+.annotation {
+  width: 100%; max-width: 920px;
+  background: #eef5fc;
+  border: 1px solid #c6dff5;
+  border-radius: 8px;
+  padding: 13px 18px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  min-height: 54px;
+  transition: opacity .3s;
+}
+.annotation::before {
+  content: "📖 ";
+}
+
+/* ── main layout ── */
+.main-area {
+  display: flex; align-items: flex-start; gap: 20px;
+  width: 100%; max-width: 1200px;
+}
+.svg-card {
+  flex: 1 1 auto; min-width: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  overflow-x: auto;
+}
+svg { display: block; width: 100%; height: auto; }
+
+/* ── SVG node styles ── */
+.node {
+  stroke: var(--ink); stroke-width: 1.6;
+  cursor: pointer;
+  transition: opacity .5s, filter .2s;
+}
+.sex-m  { fill: #fff; }
+.sex-f  { fill: #fff; }
+.sex-u  { fill: var(--unknown); }
+.node:hover { filter: brightness(.88); }
+
+/* line styles */
+.fam-line {
+  stroke: var(--line); stroke-width: 1.5;
+  fill: none;
+  transition: opacity .5s;
+}
+
+/* text */
+.node-label {
+  font-size: 11px; font-weight: 600;
+  text-anchor: middle; dominant-baseline: auto;
+  fill: var(--ink);
+  pointer-events: none;
+}
+.node-age {
+  font-size: 10px;
+  text-anchor: middle; dominant-baseline: auto;
+  fill: #666;
+  pointer-events: none;
+}
+.gen-band { fill: #000; opacity: .03; }
+.gen-band-label {
+  font-size: 9px; fill: #aaa;
+  dominant-baseline: middle;
+}
+
+/* hidden class toggled by JS */
+.hidden { opacity: 0; pointer-events: none; }
+
+/* ── legend sidebar ── */
+.legend-card {
+  flex: none; width: 200px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 14px;
+}
+.legend-card h2 {
+  font-size: 11px; text-transform: uppercase;
+  letter-spacing: .07em; color: #999;
+  margin-bottom: 14px; font-weight: 600;
+}
+.leg-item {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 13px; font-size: 13px;
+}
+.leg-item:last-child { margin-bottom: 0; }
+.leg-icon { flex: none; width: 32px; height: 32px; }
+
+/* ── tooltip ── */
+#tooltip {
+  position: fixed; pointer-events: none;
+  background: #222; color: #fff;
+  font-size: 12px; line-height: 1.4;
+  padding: 7px 10px; border-radius: 6px;
+  max-width: 220px;
+  opacity: 0; transition: opacity .15s;
+  z-index: 100;
+}
+
+@media (max-width: 700px) {
+  .main-area { flex-direction: column; }
+  .legend-card { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Pedigree — a journey through the generations</h1>
+  <p>Biologically reconstructed family tree · archaeological burial site · Pilot tree</p>
+</div>
+
+<!-- ── How-to-read accordion ── -->
+<div class="intro-card">
+  <button class="intro-toggle" id="introBtn">
+    How to read this pedigree diagram
+    <span class="arrow">▼</span>
+  </button>
+  <div class="intro-body" id="introBody">
+    <div class="sym-row">
+      <svg viewBox="0 0 44 44">
+        <rect x="8" y="8" width="28" height="28" fill="#fff" stroke="#1d1d1b" stroke-width="2"/>
+      </svg>
+      <p><strong>Square = male</strong>Each box represents one male individual found at the site.</p>
+    </div>
+    <div class="sym-row">
+      <svg viewBox="0 0 44 44">
+        <circle cx="22" cy="22" r="14" fill="#fff" stroke="#1d1d1b" stroke-width="2"/>
+      </svg>
+      <p><strong>Circle = female</strong>Each circle represents one female individual.</p>
+    </div>
+    <div class="sym-row">
+      <svg viewBox="0 0 44 44">
+        <polygon points="22,6 38,22 22,38 6,22" fill="#e0e0e0" stroke="#1d1d1b" stroke-width="2"/>
+      </svg>
+      <p><strong>Diamond = sex unknown</strong>Sex could not be determined from the skeletal remains.</p>
+    </div>
+    <hr>
+    <div class="sym-row">
+      <svg viewBox="0 0 80 44">
+        <rect x="2" y="14" width="24" height="24" fill="#fff" stroke="#1d1d1b" stroke-width="2"/>
+        <line x1="26" y1="26" x2="54" y2="26" stroke="#1d1d1b" stroke-width="2"/>
+        <circle cx="68" cy="26" r="12" fill="#fff" stroke="#1d1d1b" stroke-width="2"/>
+      </svg>
+      <p><strong>Couple bar</strong>A horizontal line joining a square and circle means they were a reproductive pair (inferred from DNA).</p>
+    </div>
+    <div class="sym-row">
+      <svg viewBox="0 0 80 60">
+        <line x1="40" y1="0" x2="40" y2="22" stroke="#1d1d1b" stroke-width="2"/>
+        <line x1="16" y1="22" x2="64" y2="22" stroke="#1d1d1b" stroke-width="2"/>
+        <line x1="16" y1="22" x2="16" y2="46" stroke="#1d1d1b" stroke-width="2"/>
+        <line x1="64" y1="22" x2="64" y2="46" stroke="#1d1d1b" stroke-width="2"/>
+        <rect x="4"  y="46" width="24" height="14" fill="#fff" stroke="#1d1d1b" stroke-width="1.5"/>
+        <rect x="52" y="46" width="24" height="14" fill="#fff" stroke="#1d1d1b" stroke-width="1.5"/>
+      </svg>
+      <p><strong>Parent–child links</strong>A vertical line drops from the couple's midpoint to a horizontal sibship bar, from which lines branch to each child below.</p>
+    </div>
+    <div class="sym-row">
+      <svg viewBox="0 0 44 44">
+        <rect x="4" y="4" width="14" height="14" fill="#c8dff5" stroke="#1d1d1b" stroke-width="1.5"/>
+        <rect x="26" y="4" width="14" height="14" fill="#e0e0e0" stroke="#1d1d1b" stroke-width="1.5"/>
+        <text x="9" y="33" font-size="9" fill="#888" font-family="sans-serif">filled</text>
+        <text x="27" y="33" font-size="9" fill="#888" font-family="sans-serif">empty</text>
+      </svg>
+      <p><strong>Fill = identified</strong>Filled nodes have a burial-site label and an estimated age at death. Empty (white) nodes are inferred from DNA but remain otherwise unidentified.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Controls ── -->
+<div class="controls">
+  <button class="play-btn" id="playBtn" title="Play / pause">&#9654;</button>
+  <input type="range" id="genSlider" min="1" max="5" value="1" step="1">
+  <span class="gen-label" id="genLabel">Generation 1</span>
+</div>
+<div class="tick-row"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>
+
+<!-- ── Annotation panel ── -->
+<div class="annotation" id="annotation"></div>
+
+<!-- ── Main diagram + legend ── -->
+<div class="main-area">
+  <div class="svg-card">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="-1134.0 0.0 2368.0 980.0">
+    <rect class="gen-band" x="-1134.0" y="174.5" width="2368.0" height="190.0" />
+    <rect class="gen-band" x="-1134.0" y="554.5" width="2368.0" height="190.0" />
+    <g data-gen="1">
+      <rect class="node node-gen1 sex-m" x="-41.0" y="48.0" width="44" height="44" data-id="g2_m" />
+      <title>Gen_A_1 · age at death: 60-70</title>
+      <text class="node-label" x="-19.0" y="116.0">Gen_A_1</text>
+      <text class="node-age" x="-19.0" y="132.0">60-70</text>
+      <circle class="node node-gen1 sex-f" cx="57.0" cy="70.0" r="22" data-id="g2_f" />
+      <title>Gen_A_2 · age at death: 60-70</title>
+      <text class="node-label" x="57.0" y="116.0">Gen_A_2</text>
+      <text class="node-age" x="57.0" y="132.0">60-70</text>
+    </g>
+    <g data-gen="2">
+      <line class="fam-line gen2" x1="3.0" y1="70.0" x2="35.0" y2="70.0" />
+      <line class="fam-line gen2" x1="19.0" y1="92.0" x2="19.0" y2="146.0" />
+      <line class="fam-line gen2" x1="-989.0" y1="146.0" x2="1054.0" y2="146.0" />
+      <line class="fam-line gen2" x1="-989.0" y1="146.0" x2="-989.0" y2="238.0" />
+      <line class="fam-line gen2" x1="-485.0" y1="146.0" x2="-485.0" y2="238.0" />
+      <line class="fam-line gen2" x1="-84.0" y1="146.0" x2="-84.0" y2="238.0" />
+      <line class="fam-line gen2" x1="485.0" y1="146.0" x2="485.0" y2="238.0" />
+      <line class="fam-line gen2" x1="1054.0" y1="146.0" x2="1054.0" y2="238.0" />
+      <rect class="node node-gen2 sex-m" x="-1011.0" y="238.0" width="44" height="44" data-id="leo068" />
+      <title>Gen_B_1 · ZP_095 · age at death: 60–70</title>
+      <text class="node-label" x="-989.0" y="306.0">Gen_B_1</text>
+      <text class="node-age" x="-989.0" y="322.0">60–70</text>
+      <rect class="node node-gen2 sex-m" x="-507.0" y="238.0" width="44" height="44" data-id="leo038" />
+      <title>Gen_B_2 · ZP_056 · age at death: 30–40</title>
+      <text class="node-label" x="-485.0" y="306.0">Gen_B_2</text>
+      <text class="node-age" x="-485.0" y="322.0">30–40</text>
+      <circle class="node node-gen2 sex-f" cx="-84.0" cy="260.0" r="22" data-id="leo083" />
+      <title>Gen_B_3 · ZP_114_A · age at death: 40–60</title>
+      <text class="node-label" x="-84.0" y="306.0">Gen_B_3</text>
+      <text class="node-age" x="-84.0" y="322.0">40–60</text>
+      <rect class="node node-gen2 sex-m" x="463.0" y="238.0" width="44" height="44" data-id="leo092" />
+      <title>Gen_B_4 · ZP_123 · age at death: 55–65</title>
+      <text class="node-label" x="485.0" y="306.0">Gen_B_4</text>
+      <text class="node-age" x="485.0" y="322.0">55–65</text>
+      <polygon class="node node-gen2 sex-u" points="1054.0,241.3 1072.7,260.0 1054.0,278.7 1035.3,260.0" data-id="g3_u1" />
+      <title>Gen_B_5</title>
+      <text class="node-label" x="1054.0" y="306.0">Gen_B_5</text>
+      <circle class="node node-gen2 sex-f" cx="-913.0" cy="260.0" r="22" data-id="g3_f1" />
+      <title>Gen_B_6</title>
+      <text class="node-label" x="-913.0" y="306.0">Gen_B_6</text>
+      <circle class="node node-gen2 sex-f" cx="561.0" cy="260.0" r="22" data-id="g3_f2" />
+      <title>Gen_B_7</title>
+      <text class="node-label" x="561.0" y="306.0">Gen_B_7</text>
+      <circle class="node node-gen2 sex-f" cx="-409.0" cy="260.0" r="22" data-id="g4_u1" />
+      <title>Gen_B_7</title>
+      <text class="node-label" x="-409.0" y="306.0">Gen_B_7</text>
+    </g>
+    <g data-gen="3">
+      <line class="fam-line gen3" x1="-967.0" y1="260.0" x2="-935.0" y2="260.0" />
+      <line class="fam-line gen3" x1="-951.0" y1="282.0" x2="-951.0" y2="336.0" />
+      <line class="fam-line gen3" x1="-1054.0" y1="336.0" x2="-924.0" y2="336.0" />
+      <line class="fam-line gen3" x1="-1054.0" y1="336.0" x2="-1054.0" y2="428.0" />
+      <line class="fam-line gen3" x1="-924.0" y1="336.0" x2="-924.0" y2="428.0" />
+      <line class="fam-line gen3" x1="507.0" y1="260.0" x2="539.0" y2="260.0" />
+      <line class="fam-line gen3" x1="523.0" y1="282.0" x2="523.0" y2="336.0" />
+      <line class="fam-line gen3" x1="84.0" y1="336.0" x2="550.0" y2="336.0" />
+      <line class="fam-line gen3" x1="84.0" y1="336.0" x2="84.0" y2="428.0" />
+      <line class="fam-line gen3" x1="550.0" y1="336.0" x2="550.0" y2="428.0" />
+      <line class="fam-line gen3" x1="-463.0" y1="260.0" x2="-431.0" y2="260.0" />
+      <line class="fam-line gen3" x1="-447.0" y1="282.0" x2="-447.0" y2="336.0" />
+      <line class="fam-line gen3" x1="-550.0" y1="336.0" x2="-252.0" y2="336.0" />
+      <line class="fam-line gen3" x1="-550.0" y1="336.0" x2="-550.0" y2="428.0" />
+      <line class="fam-line gen3" x1="-252.0" y1="336.0" x2="-252.0" y2="428.0" />
+      <circle class="node node-gen3 sex-f" cx="-1054.0" cy="450.0" r="22" data-id="leo126" />
+      <title>Gen_C_1 · ZP_068 · age at death: 12–14</title>
+      <text class="node-label" x="-1054.0" y="496.0">Gen_C_1</text>
+      <text class="node-age" x="-1054.0" y="512.0">12–14</text>
+      <rect class="node node-gen3 sex-m" x="-946.0" y="428.0" width="44" height="44" data-id="leo108" />
+      <title>Gen_C_2 · ZP_144_B · age at death: 25–35</title>
+      <text class="node-label" x="-924.0" y="496.0">Gen_C_2</text>
+      <text class="node-age" x="-924.0" y="512.0">25–35</text>
+      <polygon class="node node-gen3 sex-u" points="84.0,431.3 102.7,450.0 84.0,468.7 65.3,450.0" data-id="leo082" />
+      <title>Gen_C_3 · ZP_112 · age at death: 30–35</title>
+      <text class="node-label" x="84.0" y="496.0">Gen_C_3</text>
+      <text class="node-age" x="84.0" y="512.0">30–35</text>
+      <rect class="node node-gen3 sex-m" x="528.0" y="428.0" width="44" height="44" data-id="leo034" />
+      <title>Gen_C_4 · ZP_051 · age at death: 50–60</title>
+      <text class="node-label" x="550.0" y="496.0">Gen_C_4</text>
+      <text class="node-age" x="550.0" y="512.0">50–60</text>
+      <circle class="node node-gen3 sex-f" cx="626.0" cy="450.0" r="22" data-id="g4_f1" />
+      <title>Gen_C_5</title>
+      <text class="node-label" x="626.0" y="496.0">Gen_C_5</text>
+      <circle class="node node-gen3 sex-f" cx="-550.0" cy="450.0" r="22" data-id="leo105" />
+      <title>Gen_C_6 · ZP_138 · age at death: ~3</title>
+      <text class="node-label" x="-550.0" y="496.0">Gen_C_6</text>
+      <text class="node-age" x="-550.0" y="512.0">~3</text>
+      <rect class="node node-gen3 sex-m" x="-274.0" y="428.0" width="44" height="44" data-id="leo112" />
+      <title>Gen_C_7 · ZP_148 · age at death: 15–18</title>
+      <text class="node-label" x="-252.0" y="496.0">Gen_C_7</text>
+      <text class="node-age" x="-252.0" y="512.0">15–18</text>
+      <rect class="node node-gen3 sex-m" x="-496.0" y="428.0" width="44" height="44" data-id="tom" />
+      <title>Gen_C_8 · ZP_067_K · age at death: 40–50</title>
+      <text class="node-label" x="-474.0" y="496.0">Gen_C_8</text>
+      <text class="node-age" x="-474.0" y="512.0">40–50</text>
+    </g>
+    <g data-gen="4">
+      <line class="fam-line gen4" x1="572.0" y1="450.0" x2="604.0" y2="450.0" />
+      <line class="fam-line gen4" x1="588.0" y1="472.0" x2="588.0" y2="526.0" />
+      <line class="fam-line gen4" x1="252.0" y1="526.0" x2="848.0" y2="526.0" />
+      <line class="fam-line gen4" x1="252.0" y1="526.0" x2="252.0" y2="618.0" />
+      <line class="fam-line gen4" x1="550.0" y1="526.0" x2="550.0" y2="618.0" />
+      <line class="fam-line gen4" x1="848.0" y1="526.0" x2="848.0" y2="618.0" />
+      <line class="fam-line gen4" x1="-528.0" y1="450.0" x2="-496.0" y2="450.0" />
+      <line class="fam-line gen4" x1="-512.0" y1="472.0" x2="-512.0" y2="526.0" />
+      <line class="fam-line gen4" x1="-680.0" y1="526.0" x2="-420.0" y2="526.0" />
+      <line class="fam-line gen4" x1="-680.0" y1="526.0" x2="-680.0" y2="618.0" />
+      <line class="fam-line gen4" x1="-550.0" y1="526.0" x2="-550.0" y2="618.0" />
+      <line class="fam-line gen4" x1="-420.0" y1="526.0" x2="-420.0" y2="618.0" />
+      <circle class="node node-gen4 sex-f" cx="252.0" cy="640.0" r="22" data-id="leo073" />
+      <title>Gen_D_1 · ZP_102 · age at death: 35–50</title>
+      <text class="node-label" x="252.0" y="686.0">Gen_D_1</text>
+      <text class="node-age" x="252.0" y="702.0">35–50</text>
+      <rect class="node node-gen4 sex-m" x="528.0" y="618.0" width="44" height="44" data-id="leo046" />
+      <title>Gen_D_2 · ZP_067_A · age at death: 20–30</title>
+      <text class="node-label" x="550.0" y="686.0">Gen_D_2</text>
+      <text class="node-age" x="550.0" y="702.0">20–30</text>
+      <rect class="node node-gen4 sex-m" x="826.0" y="618.0" width="44" height="44" data-id="leo044" />
+      <title>Gen_D_3 · ZP_065 · age at death: 18–25</title>
+      <text class="node-label" x="848.0" y="686.0">Gen_D_3</text>
+      <text class="node-age" x="848.0" y="702.0">18–25</text>
+      <circle class="node node-gen4 sex-f" cx="626.0" cy="640.0" r="22" data-id="sara" />
+      <title>Gen_D_4 · ZP_067_K · age at death: 40–50</title>
+      <text class="node-label" x="626.0" y="686.0">Gen_D_4</text>
+      <text class="node-age" x="626.0" y="702.0">40–50</text>
+      <circle class="node node-gen4 sex-f" cx="-680.0" cy="640.0" r="22" data-id="tom1" />
+      <title>Gen_D_5 · ZP_067_K · age at death: 40–50</title>
+      <text class="node-label" x="-680.0" y="686.0">Gen_D_5</text>
+      <text class="node-age" x="-680.0" y="702.0">40–50</text>
+      <rect class="node node-gen4 sex-m" x="-572.0" y="618.0" width="44" height="44" data-id="tom2" />
+      <title>Gen_D_6 · ZP_067_K · age at death: 40–50</title>
+      <text class="node-label" x="-550.0" y="686.0">Gen_D_6</text>
+      <text class="node-age" x="-550.0" y="702.0">40–50</text>
+      <circle class="node node-gen4 sex-f" cx="-420.0" cy="640.0" r="22" data-id="tom3" />
+      <title>Gen_D_7 · ZP_067_K · age at death: 40–50</title>
+      <text class="node-label" x="-420.0" y="686.0">Gen_D_7</text>
+      <text class="node-age" x="-420.0" y="702.0">40–50</text>
+    </g>
+    <g data-gen="5">
+      <line class="fam-line gen5" x1="572.0" y1="640.0" x2="604.0" y2="640.0" />
+      <line class="fam-line gen5" x1="588.0" y1="662.0" x2="588.0" y2="716.0" />
+      <line class="fam-line gen5" x1="420.0" y1="716.0" x2="680.0" y2="716.0" />
+      <line class="fam-line gen5" x1="420.0" y1="716.0" x2="420.0" y2="808.0" />
+      <line class="fam-line gen5" x1="550.0" y1="716.0" x2="550.0" y2="808.0" />
+      <line class="fam-line gen5" x1="680.0" y1="716.0" x2="680.0" y2="808.0" />
+      <rect class="node node-gen5 sex-m" x="398.0" y="808.0" width="44" height="44" data-id="leo026" />
+      <title>Gen_E_1 · ZP_038 · age at death: 14–16</title>
+      <text class="node-label" x="420.0" y="876.0">Gen_E_1</text>
+      <text class="node-age" x="420.0" y="892.0">14–16</text>
+      <circle class="node node-gen5 sex-f" cx="550.0" cy="830.0" r="22" data-id="leo047" />
+      <title>Gen_E_2 · ZP_067_B · age at death: ~4</title>
+      <text class="node-label" x="550.0" y="876.0">Gen_E_2</text>
+      <text class="node-age" x="550.0" y="892.0">~4</text>
+      <rect class="node node-gen5 sex-m" x="658.0" y="808.0" width="44" height="44" data-id="leo048" />
+      <title>Gen_E_3 · ZP_067_C · age at death: 1–2</title>
+      <text class="node-label" x="680.0" y="876.0">Gen_E_3</text>
+      <text class="node-age" x="680.0" y="892.0">1–2</text>
+    </g>
+    </svg>
+  </div>
+
+  <div class="legend-card">
+    <h2>Legend</h2>
+    <div class="leg-item">
+      <svg viewBox="0 0 32 32" class="leg-icon">
+        <rect x="3" y="3" width="26" height="26" fill="#fff" stroke="#1d1d1b" stroke-width="2"/>
+      </svg>
+      <span>Male</span>
+    </div>
+    <div class="leg-item">
+      <svg viewBox="0 0 32 32" class="leg-icon">
+        <circle cx="16" cy="16" r="13" fill="#fff" stroke="#1d1d1b" stroke-width="2"/>
+      </svg>
+      <span>Female</span>
+    </div>
+    <div class="leg-item">
+      <svg viewBox="0 0 32 32" class="leg-icon">
+        <polygon points="16,2 30,16 16,30 2,16" fill="#e0e0e0" stroke="#1d1d1b" stroke-width="2"/>
+      </svg>
+      <span>Sex unknown</span>
+    </div>
+    <div class="leg-item">
+      <svg viewBox="0 0 32 32" class="leg-icon">
+        <rect x="3" y="3" width="26" height="26" fill="#fff" stroke="#1d1d1b" stroke-width="2"/>
+      </svg>
+      <span>Unidentified (inferred)</span>
+    </div>
+    <div class="leg-item">
+      <svg viewBox="0 0 32 32" class="leg-icon">
+        <line x1="4" y1="16" x2="28" y2="16" stroke="#1d1d1b" stroke-width="2"/>
+        <line x1="16" y1="16" x2="16" y2="28" stroke="#1d1d1b" stroke-width="2"/>
+      </svg>
+      <span>Parent–child link</span>
+    </div>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+/* ── data ── */
+const GEN_NOTES = {"2": "We start with the founding couple \u2014 the oldest generation identified at this site. A square (\u25a1) represents a male, a circle (\u25cb) a female. The horizontal line between them shows they were a reproductive pair.", "3": "A vertical line drops from the couple's midpoint, then branches via a horizontal 'sibship bar' to each child below. These four brothers (green squares) were buried at Leobersdorf. Two additional individuals connected on the left belong to a related family unit.", "4": "Two of the brothers had their own families, identified by ancient DNA. Parent\u2013child links repeat the same vertical-drop pattern you saw in Generation 3. Unknown partners appear as empty symbols.", "5": "A third generation of descendants appears. Notice how the tree fans out to the right: each new family unit follows the same reading rules \u2014 couple above, children below.", "6": "The youngest generation includes three brothers \u2014 one still an infant (age 1\u20132). All three were children of the same father from Generation 5, demonstrating three successive generations of male-line burial at this site."};
+const GEN_MIN = 1, GEN_MAX = 5;
+
+/* ── intro accordion ── */
+const introBtn  = document.getElementById('introBtn');
+const introBody = document.getElementById('introBody');
+introBtn.addEventListener('click', () => {
+  const open = introBody.classList.toggle('open');
+  introBtn.classList.toggle('open', open);
+});
+
+/* ── diagram reveal ── */
+const slider    = document.getElementById('genSlider');
+const genLabel  = document.getElementById('genLabel');
+const playBtn   = document.getElementById('playBtn');
+const annotation= document.getElementById('annotation');
+
+function render(gen) {
+  // Show/hide nodes and lines
+  document.querySelectorAll('.node, .fam-line').forEach(el => {
+    const elGen = parseInt(el.dataset.gen || el.closest('[data-gen]')?.dataset.gen || '0');
+    el.classList.toggle('hidden', elGen > gen);
+  });
+  // Show/hide whole gen groups
+  document.querySelectorAll('[data-gen]').forEach(g => {
+    const gn = parseInt(g.dataset.gen);
+    g.classList.toggle('hidden', gn > gen);
+  });
+  genLabel.textContent = 'Generation ' + gen;
+  annotation.textContent = GEN_NOTES[gen] || '';
+}
+
+slider.addEventListener('input', () => {
+  stopPlay(); render(parseInt(slider.value));
+});
+
+/* ── play ── */
+let timer = null;
+function startPlay() {
+  if (parseInt(slider.value) >= GEN_MAX) { slider.value = GEN_MIN; render(GEN_MIN); }
+  playBtn.innerHTML = '&#10074;&#10074;';
+  timer = setInterval(() => {
+    let v = parseInt(slider.value) + 1;
+    if (v > GEN_MAX) { stopPlay(); return; }
+    slider.value = v; render(v);
+  }, 1500);
+}
+function stopPlay() {
+  clearInterval(timer); timer = null;
+  playBtn.innerHTML = '&#9654;';
+}
+playBtn.addEventListener('click', () => timer ? stopPlay() : startPlay());
+
+/* ── tooltip ── */
+const tip = document.getElementById('tooltip');
+document.querySelectorAll('.node').forEach(el => {
+  el.addEventListener('mouseenter', e => {
+    const title = el.querySelector('title')?.textContent || '';
+    tip.textContent = title;
+    tip.style.opacity = '1';
+    moveTip(e);
+  });
+  el.addEventListener('mousemove', moveTip);
+  el.addEventListener('mouseleave', () => { tip.style.opacity = '0'; });
+});
+function moveTip(e) {
+  tip.style.left = (e.clientX + 14) + 'px';
+  tip.style.top  = (e.clientY - 28) + 'px';
+}
+
+/* ── init ── */
+render(GEN_MIN);
+</script>
+</body>
+</html>
